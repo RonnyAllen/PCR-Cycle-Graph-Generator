@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PCR Protocol Graph Generator</title>
+<style>
+  /* ===== semantic theme tokens ===== */
+  :root {
+    --bg:#f8fafc;
+    --surface:#ffffff;
+    --surface-2:#f8fafc;
+    --border:#e2e8f0;
+    --border-soft:#f1f5f9;
+    --text:#1e293b;
+    --text-strong:#334155;
+    --text-muted:#475569;
+    --text-faint:#64748b;
+    --text-fainter:#94a3b8;
+    --input-bg:#ffffff;
+    --input-border:#cbd5e1;
+    --input-disabled:#f1f5f9;
+    --accent:#4f46e5;
+    --accent-hover:#4338ca;
+    --accent-ring:#c7d2fe;
+    --accent-focus:#6366f1;
+    --accent-soft-bg:#eef2ff;
+    --accent-soft-bd:#a5b4fc;
+    --accent-soft-tx:#4f46e5;
+    --on-accent:#ffffff;
+    --hover-bg:#f1f5f9;
+    --shadow:0 1px 2px rgba(0,0,0,.05);
+    --canvas-bg:#ffffff;
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f172a;
+    --surface:#1e293b;
+    --surface-2:#161f33;
+    --border:#334155;
+    --border-soft:#2a3750;
+    --text:#e2e8f0;
+    --text-strong:#f1f5f9;
+    --text-muted:#cbd5e1;
+    --text-faint:#9fb0c9;
+    --text-fainter:#7c8aa3;
+    --input-bg:#0f172a;
+    --input-border:#3b4a63;
+    --input-disabled:#1a2436;
+    --accent:#6366f1;
+    --accent-hover:#818cf8;
+    --accent-ring:rgba(129,140,248,.35);
+    --accent-focus:#818cf8;
+    --accent-soft-bg:#232c4d;
+    --accent-soft-bd:#4f46e5;
+    --accent-soft-tx:#a5b4fc;
+    --on-accent:#ffffff;
+    --hover-bg:#283449;
+    --shadow:0 1px 2px rgba(0,0,0,.45);
+    --canvas-bg:#0f1729;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    transition: background .2s ease, color .2s ease;
+  }
+  .wrap { max-width:72rem; margin:0 auto; padding:0 1rem; }
+  @media (min-width:640px){ .wrap { padding:0 1.5rem; } }
+
+  /* header */
+  header { border-bottom:1px solid var(--border); background:var(--surface); }
+  .hbar { display:flex; align-items:center; gap:.75rem; padding:1rem 0; }
+  .logo {
+    width:2.25rem; height:2.25rem; border-radius:.5rem; background:var(--accent);
+    color:#fff; display:grid; place-items:center; flex-shrink:0;
+  }
+  .htext h1 { font-size:1rem; font-weight:700; margin:0; color:var(--text); }
+  .htext p  { font-size:.75rem; margin:.1rem 0 0; color:var(--text-faint); }
+  .hactions { margin-left:auto; display:flex; gap:.5rem; }
+  .hbtn {
+    display:inline-flex; align-items:center; gap:.375rem;
+    border:1px solid var(--input-border); border-radius:.375rem; padding:.4rem .6rem;
+    font-size:.75rem; font-weight:500; color:var(--text-muted);
+    background:var(--surface); cursor:pointer;
+  }
+  .hbtn:hover { background:var(--hover-bg); }
+
+  /* layout */
+  main.wrap { display:flex; flex-direction:column; gap:1.5rem; padding-top:1.5rem; padding-bottom:1.5rem; }
+  @media (min-width:1024px){ main.wrap { flex-direction:row; } }
+  .form-col { display:flex; flex-direction:column; gap:1rem; }
+  @media (min-width:1024px){ .form-col { width:24rem; flex-shrink:0; } }
+  .preview-col { min-width:0; flex:1; }
+  @media (min-width:1024px){ .sticky { position:sticky; top:1.5rem; } }
+
+  /* cards */
+  .card {
+    border:1px solid var(--border); background:var(--surface); border-radius:.75rem;
+    padding:1rem; box-shadow:var(--shadow);
+  }
+  .card-head { display:flex; align-items:center; gap:.5rem; margin-bottom:.75rem; }
+  .dot { width:.625rem; height:.625rem; border-radius:9999px; flex-shrink:0; }
+  .card-head h3 { font-size:.875rem; font-weight:600; color:var(--text-strong); margin:0; }
+  .stack > * + * { margin-top:.75rem; }
+
+  /* text fields */
+  .field label { display:block; }
+  .field .lab { display:block; margin-bottom:.25rem; font-size:.75rem; font-weight:500; color:var(--text-faint); }
+  .input-wrap { position:relative; }
+  input.txt {
+    width:100%; border:1px solid var(--input-border); border-radius:.375rem;
+    padding:.45rem .75rem; font-size:.875rem; outline:none; background:var(--input-bg); color:var(--text);
+  }
+  input.txt.has-suffix { padding-right:2.5rem; }
+  input:focus { border-color:var(--accent-focus); box-shadow:0 0 0 2px var(--accent-ring); }
+  .suffix {
+    position:absolute; right:.75rem; top:50%; transform:translateY(-50%);
+    font-size:.75rem; color:var(--text-fainter); pointer-events:none;
+  }
+
+  /* stage rows */
+  .stage-row { border:1px solid var(--border-soft); background:var(--surface-2); border-radius:.5rem; padding:.75rem; }
+  .stage-name { margin-bottom:.5rem; font-size:.75rem; font-weight:600; color:var(--text-muted); }
+  .tt { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1rem; }
+  .tt-grp { display:flex; align-items:center; gap:.375rem; }
+  .tt-lab { width:2.25rem; font-size:.75rem; color:var(--text-fainter); }
+
+  /* temp input */
+  .temp-wrap { position:relative; }
+  input.temp {
+    width:5rem; border:1px solid var(--input-border); border-radius:.375rem;
+    padding:.45rem 1.75rem .45rem .5rem; font-size:.875rem; font-variant-numeric:tabular-nums;
+    outline:none; background:var(--input-bg); color:var(--text);
+  }
+  .temp-unit { position:absolute; right:.5rem; top:50%; transform:translateY(-50%); font-size:.75rem; color:var(--text-fainter); pointer-events:none; }
+
+  /* number boxes (time + cycles) */
+  .timefield { display:flex; align-items:center; gap:.25rem; }
+  input.num {
+    width:3rem; border:1px solid var(--input-border); border-radius:.375rem;
+    padding:.4rem .25rem; font-size:.875rem; text-align:center; font-variant-numeric:tabular-nums;
+    outline:none; background:var(--input-bg); color:var(--text);
+  }
+  input.num.wide { width:4rem; }
+  input.num:disabled { background:var(--input-disabled); color:var(--text-fainter); }
+  .colon { font-weight:600; color:var(--text-fainter); }
+  .hhmm { margin-left:.25rem; font-size:.75rem; color:var(--text-fainter); }
+
+  /* auto button */
+  .mini-btn {
+    border-radius:.375rem; padding:.3rem .55rem; font-size:.75rem; font-weight:500; cursor:pointer;
+    border:1px solid var(--input-border); color:var(--text-faint); background:var(--surface);
+  }
+  .mini-btn:hover { background:var(--hover-bg); }
+  .mini-btn.active { border-color:var(--accent-soft-bd); background:var(--accent-soft-bg); color:var(--accent-soft-tx); }
+
+  /* cycles row */
+  .cycles-row { display:flex; align-items:center; gap:.5rem; padding-left:.25rem; padding-top:.25rem; }
+  .cycles-row .lbl { font-size:.875rem; font-weight:500; color:var(--text-muted); }
+  .cycles-row .unit { font-size:.75rem; color:var(--text-fainter); }
+
+  /* hold checkbox */
+  .chk { display:inline-flex; align-items:center; gap:.375rem; font-size:.75rem; font-weight:500; color:var(--text-muted); cursor:pointer; }
+  .chk input { accent-color:var(--accent); }
+
+  /* info note */
+  .note {
+    display:flex; align-items:flex-start; gap:.5rem; border:1px solid var(--border);
+    background:var(--surface); border-radius:.5rem; padding:.6rem .75rem; font-size:.75rem; color:var(--text-faint);
+  }
+  .note svg { flex-shrink:0; margin-top:.1rem; color:var(--text-fainter); }
+
+  /* preview */
+  .panel { border:1px solid var(--border); background:var(--surface); border-radius:.75rem; padding:.75rem; box-shadow:var(--shadow); }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; padding:0 .25rem; margin-bottom:.5rem; }
+  .panel-head .ttl { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-fainter); }
+  .panel-head .rt { font-size:.75rem; color:var(--text-fainter); }
+  .canvas-box { overflow:hidden; border:1px solid var(--border-soft); border-radius:.5rem; }
+  canvas#preview { display:block; width:100%; height:auto; background:var(--canvas-bg); }
+
+  .export-row { display:flex; flex-direction:column; gap:.75rem; margin-top:1rem; }
+  @media (min-width:640px){ .export-row { flex-direction:row; } }
+  .btn {
+    flex:1; display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    border-radius:.5rem; padding:.625rem 1rem; font-size:.875rem; font-weight:600; cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .btn-primary { background:var(--accent); color:var(--on-accent); border:1px solid var(--accent); }
+  .btn-primary:hover { background:var(--accent-hover); }
+  .btn-secondary { background:var(--surface); color:var(--accent-soft-tx); border:1px solid var(--accent-soft-bd); }
+  .btn-secondary:hover { background:var(--accent-soft-bg); }
+  .export-note { padding:.75rem .25rem 0; font-size:.75rem; color:var(--text-fainter); margin:0; }
+
+  /* hide number spinners for a cleaner look */
+  input[type=number].num::-webkit-outer-spin-button,
+  input[type=number].num::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  input[type=number].num { -moz-appearance:textfield; }
+</style>
+<script>
+  /* set theme before first paint to avoid flash */
+  (function () {
+    var t = "light";
+    try {
+      var s = localStorage.getItem("pcr-theme");
+      if (s === "light" || s === "dark") { t = s; }
+      else if (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) { t = "dark"; }
+    } catch (e) {}
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <div class="logo">
+      <!-- flask icon -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.58 16.5h12.85"/></svg>
+    </div>
+    <div class="htext">
+      <h1>PCR Protocol Graph Generator</h1>
+      <p>Enter your cycling parameters and export a thermal-profile graph</p>
+    </div>
+    <div class="hactions">
+      <button class="hbtn" id="themeBtn" title="Toggle light / dark theme"></button>
+      <button class="hbtn" id="resetBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- FORM -->
+  <div class="form-col">
+
+    <!-- Target -->
+    <div class="card">
+      <div class="card-head"><span class="dot" style="background:#4f46e5"></span><h3>Target</h3></div>
+      <div class="stack">
+        <div class="field">
+          <label>
+            <span class="lab">Gene name</span>
+            <div class="input-wrap"><input class="txt" type="text" id="geneName" placeholder="e.g. GAPDH" /></div>
+          </label>
+        </div>
+        <div class="field">
+          <label>
+            <span class="lab">Product length (optional)</span>
+            <div class="input-wrap">
+              <input class="txt has-suffix" type="text" id="productLength" inputmode="decimal" placeholder="e.g. 1000" />
+              <span class="suffix">bp</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Initial denaturation -->
+    <div class="card">
+      <div class="card-head"><span class="dot" style="background:#d8472f"></span><h3>Initial denaturation</h3></div>
+      <div class="tt">
+        <div class="tt-grp"><span class="tt-lab">Temp</span>
+          <div class="temp-wrap"><input class="temp" id="initDenatTemp" inputmode="decimal" placeholder="95" /><span class="temp-unit">&deg;C</span></div>
+        </div>
+        <div class="tt-grp"><span class="tt-lab">Time</span>
+          <div class="timefield">
+            <input class="num" type="number" min="0" max="99" id="init-h" />
+            <span class="colon">:</span>
+            <input class="num" type="number" min="0" max="59" id="init-m" />
+            <span class="colon">:</span>
+            <input class="num" type="number" min="0" max="59" id="init-s" />
+            <span class="hhmm">hh:mm:ss</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thermal cycling -->
+    <div class="card">
+      <div class="card-head"><span class="dot" style="background:#e0892b"></span><h3 id="cycleTitle">Thermal cycling  &times; 30</h3></div>
+      <div class="stack">
+
+        <div class="stage-row">
+          <div class="stage-name">Denaturation</div>
+          <div class="tt">
+            <div class="tt-grp"><span class="tt-lab">Temp</span>
+              <div class="temp-wrap"><input class="temp" id="cycDenatTemp" inputmode="decimal" placeholder="95" /><span class="temp-unit">&deg;C</span></div>
+            </div>
+            <div class="tt-grp"><span class="tt-lab">Time</span>
+              <div class="timefield">
+                <input class="num" type="number" min="0" max="99" id="denat-h" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="denat-m" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="denat-s" />
+                <span class="hhmm">hh:mm:ss</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-row">
+          <div class="stage-name">Annealing</div>
+          <div class="tt">
+            <div class="tt-grp"><span class="tt-lab">Temp</span>
+              <div class="temp-wrap"><input class="temp" id="cycAnnealTemp" inputmode="decimal" placeholder="60" /><span class="temp-unit">&deg;C</span></div>
+            </div>
+            <div class="tt-grp"><span class="tt-lab">Time</span>
+              <div class="timefield">
+                <input class="num" type="number" min="0" max="99" id="anneal-h" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="anneal-m" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="anneal-s" />
+                <span class="hhmm">hh:mm:ss</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-row">
+          <div class="stage-name">Extension</div>
+          <div class="tt">
+            <div class="tt-grp"><span class="tt-lab">Temp</span>
+              <div class="temp-wrap"><input class="temp" id="cycExtTemp" inputmode="decimal" placeholder="72" /><span class="temp-unit">&deg;C</span></div>
+            </div>
+            <div class="tt-grp"><span class="tt-lab">Time</span>
+              <div class="timefield">
+                <input class="num" type="number" min="0" max="99" id="ext-h" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="ext-m" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="ext-s" />
+                <span class="hhmm">hh:mm:ss</span>
+              </div>
+            </div>
+            <button type="button" class="mini-btn active" id="extAutoBtn" title="Auto-calculate as 1:00 per 1000 bp from product length">Auto &middot; 1:00/kb</button>
+          </div>
+        </div>
+
+        <div class="cycles-row">
+          <span class="lbl">Number of cycles</span>
+          <input class="num wide" type="number" min="1" max="99" id="numCycles" />
+          <span class="unit">cycles</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Final steps -->
+    <div class="card">
+      <div class="card-head"><span class="dot" style="background:#0ea5a4"></span><h3>Final steps</h3></div>
+      <div class="stack">
+
+        <div class="stage-row">
+          <div class="stage-name">Final extension</div>
+          <div class="tt">
+            <div class="tt-grp"><span class="tt-lab">Temp</span>
+              <div class="temp-wrap"><input class="temp" id="finalExtTemp" inputmode="decimal" placeholder="72" /><span class="temp-unit">&deg;C</span></div>
+            </div>
+            <div class="tt-grp"><span class="tt-lab">Time</span>
+              <div class="timefield">
+                <input class="num" type="number" min="0" max="99" id="finalext-h" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="finalext-m" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="finalext-s" />
+                <span class="hhmm">hh:mm:ss</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-row">
+          <div class="stage-name">Final hold</div>
+          <div class="tt">
+            <div class="tt-grp"><span class="tt-lab">Temp</span>
+              <div class="temp-wrap"><input class="temp" id="holdTemp" inputmode="decimal" placeholder="4" /><span class="temp-unit">&deg;C</span></div>
+            </div>
+            <div class="tt-grp"><span class="tt-lab">Time</span>
+              <div class="timefield">
+                <input class="num" type="number" min="0" max="99" id="hold-h" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="hold-m" />
+                <span class="colon">:</span>
+                <input class="num" type="number" min="0" max="59" id="hold-s" />
+                <span class="hhmm">hh:mm:ss</span>
+              </div>
+            </div>
+            <label class="chk"><input type="checkbox" id="holdInfinite" checked /> &infin; Hold</label>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="note">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <span>Extension time auto-fills at 1:00 per 1000&nbsp;bp when a product length is set. Edit it manually any time to override.</span>
+    </div>
+  </div>
+
+  <!-- PREVIEW + EXPORT -->
+  <div class="preview-col">
+    <div class="sticky">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="ttl">Preview</span>
+          <span class="rt" id="runTime">Est. run time &asymp; 0 s</span>
+        </div>
+        <div class="canvas-box">
+          <canvas id="preview" width="1400" height="800"></canvas>
+        </div>
+      </div>
+
+      <div class="export-row">
+        <button class="btn btn-primary" id="dlJpg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download JPG
+        </button>
+        <button class="btn btn-secondary" id="dlPng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          PNG &middot; transparent
+        </button>
+      </div>
+      <p class="export-note" id="exportNote">JPG exports on a white background. PNG exports with a transparent background for slides and posters.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ===================== helpers ===================== */
+var FF = "'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+
+var DEFAULTS = {
+  geneName: "",
+  productLength: "",
+  initDenatTemp: "95",
+  initDenatTime: 300,     // 00:05:00
+  cycDenatTemp: "95",
+  cycDenatTime: 30,       // 00:00:30
+  cycAnnealTemp: "60",
+  cycAnnealTime: 30,
+  cycExtTemp: "72",
+  cycExtTime: 60,         // 00:01:00 (1000 bp @ 1:00/kb)
+  extAuto: true,
+  numCycles: "30",
+  finalExtTemp: "72",
+  finalExtTime: 300,
+  holdTemp: "4",
+  holdInfinite: true,
+  holdTime: 0
+};
+
+var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+var numOr = function (v, d) { var x = parseFloat(v); return isNaN(x) ? d : x; };
+var fmtTemp = function (t) { return t.toFixed(1) + "\u00B0"; };
+var fmtTime = function (sec) {
+  if (sec == null) return "\u221E";
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  var mm = String(m).padStart(2, "0");
+  var ss = String(s).padStart(2, "0");
+  return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+};
+var fmtDuration = function (sec) {
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  var parts = [];
+  if (h) parts.push(h + " h");
+  if (m) parts.push(m + " min");
+  if (s || parts.length === 0) parts.push(s + " s");
+  return parts.join(" ");
+};
+
+/* ===================== canvas drawing =====================
+   opts = { bg: "white" | "dark" | "transparent", ink: "dark" | "light" } */
+function drawGraph(canvas, p, opts) {
+  opts = opts || {};
+  var bg = opts.bg || "white";
+  var lightInk = opts.ink === "light";
+
+  var ctx = canvas.getContext("2d");
+  var W = canvas.width;
+  var H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (bg === "white") {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+  } else if (bg === "dark") {
+    ctx.fillStyle = "#0f1729";
+    ctx.fillRect(0, 0, W, H);
+  }
+  var transparent = bg === "transparent";
+
+  var C = {
+    ink:   lightInk ? "#e8edf6" : "#1f2a44",
+    ink2:  lightInk ? "#aebbd4" : "#46536e",
+    line:  lightInk ? "#f15c3f" : "#d8472f",
+    green: lightInk ? "#9ad24c" : "#84bd3a",
+    grid:  transparent
+             ? (lightInk ? "rgba(150,162,184,0.20)" : "rgba(120,130,150,0.16)")
+             : (lightInk ? "rgba(150,162,184,0.16)" : "#eaedf2"),
+    dash:  transparent
+             ? (lightInk ? "rgba(170,182,205,0.70)" : "rgba(80,92,112,0.6)")
+             : (lightInk ? "rgba(150,165,190,0.65)" : "#9aa3b2")
+  };
+
+  var plotLeft = 56;
+  var plotRight = W - 56;
+  var plotTop = 152;
+  var plotBottom = H - 184;
+  var plotW = plotRight - plotLeft;
+  var plotH = plotBottom - plotTop;
+  var bands = 6;
+  var bandW = plotW / bands;
+  var rampW = bandW * 0.12;
+  var xA = function (i) { return plotLeft + i * bandW; };
+
+  var stages = p.stages;
+  var temps = stages.map(function (s) { return s.temp; });
+  var tMax = Math.max.apply(null, temps);
+  var tMin = Math.min.apply(null, temps);
+  var range = (tMax - tMin) || 1;
+  var padT = range * 0.4 + 8;
+  var padB = range * 0.22 + 8;
+  var maxT = tMax + padT;
+  var minT = tMin - padB;
+  var yFor = function (t) { return plotTop + ((maxT - t) / (maxT - minT)) * plotH; };
+
+  // grid
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = C.grid;
+  for (var i = 0; i <= bands; i++) {
+    var x = xA(i);
+    ctx.beginPath();
+    ctx.moveTo(x, plotTop - 8);
+    ctx.lineTo(x, plotBottom + 8);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(plotLeft, plotBottom + 8);
+  ctx.lineTo(plotRight, plotBottom + 8);
+  ctx.stroke();
+
+  var cycLeft = xA(1);
+  var cycRight = xA(4);
+
+  // dashed cycling boundaries
+  ctx.save();
+  ctx.setLineDash([7, 6]);
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = C.dash;
+  [cycLeft, cycRight].forEach(function (x) {
+    ctx.beginPath();
+    ctx.moveTo(x, 96);
+    ctx.lineTo(x, plotBottom + 78);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // temperature trace
+  ctx.beginPath();
+  ctx.moveTo(plotLeft, yFor(minT));
+  for (var j = 0; j < bands; j++) {
+    var a = xA(j);
+    var b = a + bandW;
+    ctx.lineTo(a + rampW, yFor(temps[j]));
+    ctx.lineTo(b, yFor(temps[j]));
+  }
+  ctx.lineWidth = 3.4;
+  ctx.strokeStyle = C.line;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.stroke();
+
+  // stage numbers
+  ctx.fillStyle = C.ink;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "700 30px " + FF;
+  for (var k = 0; k < bands; k++) ctx.fillText(String(k + 1), xA(k) + 9, 116);
+
+  // 1/3 2/3 3/3 marks + ticks
+  ctx.textAlign = "center";
+  ctx.font = "600 17px " + FF;
+  var fx = [xA(2), xA(3), xA(4)];
+  var fl = ["1/3", "2/3", "3/3"];
+  ctx.strokeStyle = C.dash;
+  ctx.lineWidth = 1;
+  for (var q = 0; q < 3; q++) {
+    ctx.fillStyle = C.ink2;
+    ctx.fillText(fl[q], fx[q], 134);
+    ctx.beginPath();
+    ctx.moveTo(fx[q], 140);
+    ctx.lineTo(fx[q], 150);
+    ctx.stroke();
+  }
+
+  // stage labels (temp + time)
+  for (var n = 0; n < bands; n++) {
+    var cx = xA(n) + bandW / 2;
+    var py = yFor(temps[n]);
+    var aboveTop = py - 72;
+    var topY = aboveTop >= 146 ? aboveTop : py + 18;
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.ink;
+    ctx.font = "700 30px " + FF;
+    ctx.fillText(fmtTemp(temps[n]), cx, topY + 26);
+    var tStr = fmtTime(stages[n].time);
+    var ty = topY + 26 + 31;
+    ctx.font = tStr === "\u221E" ? "700 34px " + FF : "600 25px " + FF;
+    ctx.fillStyle = C.ink2;
+    ctx.fillText(tStr, cx, ty);
+    if (stages[n].infinite) {
+      var iy = ty + 12;
+      var bw = 5;
+      var bh = 20;
+      var g = 6;
+      ctx.fillStyle = C.ink2;
+      ctx.fillRect(cx - g / 2 - bw, iy, bw, bh);
+      ctx.fillRect(cx + g / 2, iy, bw, bh);
+    }
+  }
+
+  // x N cycle arrow
+  var ay = plotBottom + 66;
+  var axL = cycLeft + 12;
+  var axR = cycRight - 12;
+  var cxm = (axL + axR) / 2;
+  var label = "\u00D7 " + p.cycles;
+  ctx.font = "700 30px " + FF;
+  var tw = ctx.measureText(label).width;
+  var half = tw / 2 + 18;
+  ctx.strokeStyle = C.green;
+  ctx.lineWidth = 4.5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cxm - half, ay);
+  ctx.lineTo(axL + 10, ay);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cxm + half, ay);
+  ctx.lineTo(axR - 10, ay);
+  ctx.stroke();
+  ctx.fillStyle = C.green;
+  var hs = 12;
+  ctx.beginPath();
+  ctx.moveTo(axL, ay);
+  ctx.lineTo(axL + hs, ay - hs * 0.8);
+  ctx.lineTo(axL + hs, ay + hs * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(axR, ay);
+  ctx.lineTo(axR - hs, ay - hs * 0.8);
+  ctx.lineTo(axR - hs, ay + hs * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = C.ink;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "700 30px " + FF;
+  ctx.fillText(label, cxm, ay);
+  ctx.textBaseline = "alphabetic";
+
+  // title
+  ctx.textAlign = "center";
+  ctx.fillStyle = C.ink;
+  ctx.font = "700 34px " + FF;
+  ctx.fillText(p.geneName || "PCR Protocol", W / 2, 50);
+  ctx.font = "500 19px " + FF;
+  ctx.fillStyle = C.ink2;
+  var sub = p.productLength
+    ? "Thermal cycling profile \u00B7 product " + p.productLength + " bp"
+    : "Thermal cycling profile";
+  ctx.fillText(sub, W / 2, 78);
+}
+
+/* ===================== state + wiring ===================== */
+var state = Object.assign({}, DEFAULTS);
+var $ = function (id) { return document.getElementById(id); };
+var preview = $("preview");
+
+var isDark = function () { return document.documentElement.getAttribute("data-theme") === "dark"; };
+
+function buildParams() {
+  return {
+    geneName: (state.geneName || "").trim(),
+    productLength: (state.productLength || "").trim() === "" ? null : numOr(state.productLength, null),
+    cycles: Math.max(1, parseInt(state.numCycles, 10) || 30),
+    stages: [
+      { temp: numOr(state.initDenatTemp, 95), time: state.initDenatTime },
+      { temp: numOr(state.cycDenatTemp, 95), time: state.cycDenatTime },
+      { temp: numOr(state.cycAnnealTemp, 60), time: state.cycAnnealTime },
+      { temp: numOr(state.cycExtTemp, 72), time: state.cycExtTime },
+      { temp: numOr(state.finalExtTemp, 72), time: state.finalExtTime },
+      { temp: numOr(state.holdTemp, 4), time: state.holdInfinite ? null : state.holdTime, infinite: state.holdInfinite }
+    ]
+  };
+}
+
+// time field plumbing: each field has h/m/s input ids and a state key
+var TIME_FIELDS = {
+  initDenatTime: ["init-h", "init-m", "init-s"],
+  cycDenatTime:  ["denat-h", "denat-m", "denat-s"],
+  cycAnnealTime: ["anneal-h", "anneal-m", "anneal-s"],
+  cycExtTime:    ["ext-h", "ext-m", "ext-s"],
+  finalExtTime:  ["finalext-h", "finalext-m", "finalext-s"],
+  holdTime:      ["hold-h", "hold-m", "hold-s"]
+};
+
+function secsToParts(sec) {
+  return [Math.floor(sec / 3600), Math.floor((sec % 3600) / 60), sec % 60];
+}
+function setTimeBoxes(key) {
+  var ids = TIME_FIELDS[key];
+  var p = secsToParts(state[key] || 0);
+  $(ids[0]).value = p[0];
+  $(ids[1]).value = p[1];
+  $(ids[2]).value = p[2];
+}
+function readTimeField(key) {
+  var ids = TIME_FIELDS[key];
+  var h = parseInt($(ids[0]).value, 10); if (isNaN(h)) h = 0;
+  var m = parseInt($(ids[1]).value, 10); if (isNaN(m)) m = 0;
+  var s = parseInt($(ids[2]).value, 10); if (isNaN(s)) s = 0;
+  return clamp(h, 0, 99) * 3600 + clamp(m, 0, 59) * 60 + clamp(s, 0, 59);
+}
+
+function autoCalcExtension() {
+  if (!state.extAuto) return;
+  var len = parseFloat(state.productLength);
+  if (!isNaN(len) && len > 0) {
+    state.cycExtTime = Math.max(1, Math.round((len / 1000) * 60));
+    setTimeBoxes("cycExtTime");
+  }
+}
+
+function render() {
+  var dark = isDark();
+  drawGraph(preview, buildParams(), dark ? { bg: "dark", ink: "light" } : { bg: "white", ink: "dark" });
+
+  var cyclesN = Math.max(1, parseInt(state.numCycles, 10) || 30);
+  $("cycleTitle").innerHTML = "Thermal cycling  &times; " + cyclesN;
+
+  var totalSec =
+    (state.initDenatTime || 0) +
+    cyclesN * ((state.cycDenatTime || 0) + (state.cycAnnealTime || 0) + (state.cycExtTime || 0)) +
+    (state.finalExtTime || 0) +
+    (state.holdInfinite ? 0 : (state.holdTime || 0));
+  $("runTime").innerHTML = "Est. run time &asymp; " + fmtDuration(totalSec) + (state.holdInfinite ? " + hold" : "");
+
+  // ext-auto button appearance
+  var ab = $("extAutoBtn");
+  if (state.extAuto) {
+    ab.classList.add("active");
+    ab.innerHTML = "Auto &middot; 1:00/kb";
+  } else {
+    ab.classList.remove("active");
+    ab.innerHTML = "Use auto length";
+  }
+
+  // hold time boxes enabled/disabled
+  TIME_FIELDS.holdTime.forEach(function (id) { $(id).disabled = state.holdInfinite; });
+}
+
+// push entire state into the DOM (used on load + reset)
+function syncInputsFromState() {
+  $("geneName").value = state.geneName;
+  $("productLength").value = state.productLength;
+  $("initDenatTemp").value = state.initDenatTemp;
+  $("cycDenatTemp").value = state.cycDenatTemp;
+  $("cycAnnealTemp").value = state.cycAnnealTemp;
+  $("cycExtTemp").value = state.cycExtTemp;
+  $("finalExtTemp").value = state.finalExtTemp;
+  $("holdTemp").value = state.holdTemp;
+  $("numCycles").value = state.numCycles;
+  $("holdInfinite").checked = state.holdInfinite;
+  Object.keys(TIME_FIELDS).forEach(setTimeBoxes);
+}
+
+/* ---- theme ---- */
+var ICON_MOON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6.4 6.4 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+var ICON_SUN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/></svg>';
+
+function updateThemeButton() {
+  // show the icon + label for the mode you'll switch to
+  $("themeBtn").innerHTML = isDark() ? (ICON_SUN + " Light") : (ICON_MOON + " Dark");
+}
+function updateExportNote() {
+  $("exportNote").innerHTML = isDark()
+    ? "JPG exports on a dark background. PNG exports transparent with light text \u2014 ready for dark slides."
+    : "JPG exports on a white background. PNG exports with a transparent background for slides and posters.";
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("pcr-theme", t); } catch (e) {}
+  updateThemeButton();
+  updateExportNote();
+  render();
+}
+$("themeBtn").addEventListener("click", function () { applyTheme(isDark() ? "light" : "dark"); });
+
+/* ---- event wiring ---- */
+function bindText(id, key) {
+  $(id).addEventListener("input", function (e) { state[key] = e.target.value; render(); });
+}
+bindText("geneName", "geneName");
+bindText("initDenatTemp", "initDenatTemp");
+bindText("cycDenatTemp", "cycDenatTemp");
+bindText("cycAnnealTemp", "cycAnnealTemp");
+bindText("cycExtTemp", "cycExtTemp");
+bindText("finalExtTemp", "finalExtTemp");
+bindText("holdTemp", "holdTemp");
+
+// product length also drives auto extension
+$("productLength").addEventListener("input", function (e) {
+  state.productLength = e.target.value;
+  autoCalcExtension();
+  render();
+});
+
+// cycles (clamped)
+$("numCycles").addEventListener("input", function (e) {
+  var v = parseInt(e.target.value, 10);
+  if (isNaN(v)) { state.numCycles = e.target.value; render(); return; }
+  state.numCycles = String(clamp(v, 1, 99));
+  render();
+});
+$("numCycles").addEventListener("blur", function () { $("numCycles").value = state.numCycles; });
+
+// generic time fields
+Object.keys(TIME_FIELDS).forEach(function (key) {
+  TIME_FIELDS[key].forEach(function (id) {
+    $(id).addEventListener("input", function () {
+      state[key] = readTimeField(key);
+      if (key === "cycExtTime") state.extAuto = false; // manual edit overrides auto
+      render();
+    });
+    // normalize display on blur
+    $(id).addEventListener("blur", function () { if (!$(id).disabled) setTimeBoxes(key); });
+  });
+});
+
+// ext auto button
+$("extAutoBtn").addEventListener("click", function () {
+  state.extAuto = true;
+  autoCalcExtension();
+  render();
+});
+
+// hold infinite checkbox
+$("holdInfinite").addEventListener("change", function (e) {
+  state.holdInfinite = e.target.checked;
+  render();
+});
+
+// reset (keeps current theme)
+$("resetBtn").addEventListener("click", function () {
+  state = Object.assign({}, DEFAULTS);
+  syncInputsFromState();
+  render();
+});
+
+// downloads — match the current theme so preview == export
+function download(kind) {
+  var dark = isDark();
+  var opts = (kind === "png")
+    ? { bg: "transparent", ink: dark ? "light" : "dark" }
+    : { bg: dark ? "dark" : "white", ink: dark ? "light" : "dark" };
+  var c = document.createElement("canvas");
+  c.width = 1400; c.height = 800;
+  drawGraph(c, buildParams(), opts);
+  var url = c.toDataURL(kind === "png" ? "image/png" : "image/jpeg", 0.95);
+  var safe = ((state.geneName || "").trim() || "pcr_protocol")
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "pcr_protocol";
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = safe + "." + (kind === "png" ? "png" : "jpg");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+$("dlJpg").addEventListener("click", function () { download("jpg"); });
+$("dlPng").addEventListener("click", function () { download("png"); });
+
+/* ---- init ---- */
+syncInputsFromState();
+updateThemeButton();
+updateExportNote();
+render();
+</script>
+</body>
+</html>
